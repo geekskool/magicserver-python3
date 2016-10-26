@@ -1,6 +1,6 @@
 from queue import Queue
 from threading import Thread
-from urllib.parse import urlparse, parse_qs
+from urllib.parse import parse_qs
 from uuid import uuid1
 import json
 import socket
