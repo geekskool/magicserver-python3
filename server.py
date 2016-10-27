@@ -1,9 +1,7 @@
-from queue import Queue
-from threading import Thread
 from urllib.parse import parse_qs
 from uuid import uuid1
+import asyncio
 import json
-import socket
 import time
 
 
@@ -38,58 +36,22 @@ def add_route(method, path, func):
 
 
 # Server Functions
-def spawn_thread(func, arg, daemon):
-    """Spawn thread
-    Spawn daemon threads
-    """
-    proc = Thread(target=func, args=arg)
-    proc.daemon = daemon
-    proc.start()
-
-
-def start_server(hostname, port=8080, nworkers=20):
-    """Start Function
-    Initialise socket and listen
-   """
-    try:
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.bind((hostname, port))
-        print("Server started at port:", port)
-        sock.listen(3)
-        worker_queue = Queue(nworkers)
-        for _ in range(nworkers):
-            spawn_thread(worker_thread, (worker_queue,), True)
-        while True:
-            (client_socket, addr) = sock.accept()
-            worker_queue.put((client_socket, addr))
-            spawn_thread(worker_thread, (worker_queue,), True)
-            print("Connection from:", addr)
-    except KeyboardInterrupt:
-        print("Bye Bye")
-    finally:
-        sock.close()
-
-
-def worker_thread(worker_queue):
+def worker_thread(data, addr):
     """WORKER THREAD
     Accept requests and invoke request handler
     """
     request = {}
-    client_socket, addr = worker_queue.get()
-    request["socket"] = client_socket
     request["address"] = addr
-    header_str, body_str = get_http_header(request, "")
+    header_str, body_str = get_http_header(request, data)
     if not header_str:
         return
-    header_parser(request, header_str)
+    request = header_parser(request, header_str)
     if "Content-Length" in request["header"]:
         content_length = int(request["header"]["Content-Length"])
         body_str = get_http_body(request, body_str, content_length)
         request["body"] = body_str
     if request:
-        request_handler(request)
-    else:
-        client_socket.close()
+        return request_handler(request)
 
 
 # Parsers
@@ -97,17 +59,14 @@ def get_http_header(request, data):
     """HTTP Header evaluator
     Accept HTTP header and evaluate
     """
+    print(data)
     if "\r\n\r\n" in data:
         data_list = data.split("\r\n\r\n", 1)
         header_str = data_list[0]
         body_str = ""
         if len(data_list) > 1:
             body_str = data_list[1]
-        return header_str, body_str
-    buff = request["socket"].recv(2048)
-    if not buff:
-        return "", ""
-    return get_http_header(request, data + buff.decode("UTF-8"))
+        return [header_str, body_str]
 
 
 def get_http_body(request, body_str, content_length):
@@ -116,10 +75,6 @@ def get_http_body(request, body_str, content_length):
     """
     if content_length == len(body_str):
         return body_str
-    buff = request["socket"].recv(2048)
-    if not buff:
-        return
-    return get_http_body(request, body_str + buff, content_length)
 
 
 def header_parser(request, header_str):
@@ -143,6 +98,7 @@ def header_parser(request, header_str):
     else:
         header["Cookie"] = ""
     request["header"] = header
+    return request
 
 
 def form_parser(request):
@@ -185,8 +141,8 @@ def form_parser(request):
 def request_handler(request):
     """Request Handler"""
     response = {}
-    session_handler(request, response)
-    method_handler(request, response)
+    response = session_handler(request, response)
+    return method_handler(request, response)
 
 
 def session_handler(request, response):
@@ -195,10 +151,11 @@ def session_handler(request, response):
     """
     browser_cookies = request["header"]["Cookie"]
     if "sid" in browser_cookies and browser_cookies["sid"] in SESSIONS:
-        return
+        return response
     cookie = str(uuid1())
     response["Set-Cookie"] = "sid=" + cookie
     SESSIONS[cookie] = {}
+    return response
 
 
 def method_handler(request, response):
@@ -206,15 +163,15 @@ def method_handler(request, response):
     call respective method handler
     """
     handler = METHOD[request["method"]]
-    handler(request, response)
+    return handler(request, response)
 
 
 def get_handler(request, response):
     """HTTP GET Handler"""
     try:
-        ROUTES["get"][request["path"]](request, response)
+        return ROUTES["get"][request["path"]](request, response)
     except KeyError:
-        static_file_handler(request, response)
+        return static_file_handler(request, response)
 
 
 def post_handler(request, response):
@@ -223,9 +180,9 @@ def post_handler(request, response):
         if "multipart" in request["header"]["Content-Type"]:
             form_parser(request)
         request["content"] = parse_qs(request["body"])
-        ROUTES["post"][request["path"]](request, response)
+        return ROUTES["post"][request["path"]](request, response)
     except KeyError:
-        err_404_handler(request, response)
+        return err_404_handler(request, response)
 
 
 def put_handler(request, response):
@@ -234,41 +191,44 @@ def put_handler(request, response):
         if "multipart" in request["header"]["Content-Type"]:
             form_parser(request)
         request["content"] = parse_qs(request["body"])
-        ROUTES["put"][request["path"]](request, response)
+        return ROUTES["put"][request["path"]](request, response)
     except KeyError:
-        err_404_handler(request, response)
+        return err_404_handler(request, response)
 
 
 def delete_handler(request, response):
     """HTTP DELETE Handler"""
     try:
-        ROUTES["delete"][request["path"]](request, response)
+        return ROUTES["delete"][request["path"]](request, response)
     except KeyError:
-        err_404_handler(request, response)
+        return err_404_handler(request, response)
 
 
 def head_handler(request, response):
     """HTTP HEAD Handler"""
     get_handler(request, response)
     response["content"] = ""
-    response_handler(request, response)
+    return response_handler(request, response)
 
 
 def static_file_handler(request, response):
     """HTTP Static File Handler"""
     try:
-        with open("./public" + request["path"], "rb") as file_descriptor:
-            byte = file_descriptor.read(1)
-            res = byte
-            while byte:
+        try:
+            with open("./public" + request["path"], "rb") as file_descriptor:
                 byte = file_descriptor.read(1)
-                res += byte
+                res = byte
+                while byte:
+                    byte = file_descriptor.read(1)
+                    res += byte
+        except FileNotFoundError:
+            res = b""
         response["content"] = res
         content_type = request["path"].split(".")[-1].lower()
         response["Content-type"] = CONTENT_TYPE[content_type]
-        ok_200_handler(request, response)
+        return ok_200_handler(request, response)
     except IOError:
-        err_404_handler(request, response)
+        return err_404_handler(request, response)
 
 
 def err_404_handler(request, response):
@@ -276,7 +236,7 @@ def err_404_handler(request, response):
     response["status"] = "HTTP/1.1 404 Not Found"
     response["content"] = "Content Not Found"
     response["Content-type"] = "text/HTML"
-    response_handler(request, response)
+    return response_handler(request, response)
 
 
 def ok_200_handler(request, response):
@@ -284,7 +244,8 @@ def ok_200_handler(request, response):
     response["status"] = "HTTP/1.1 200 OK"
     if response["content"] and response["Content-type"]:
         response["Content-Length"] = str(len(response["content"]))
-    response_handler(request, response)
+    res = response_handler(request, response)
+    return res
 
 
 def response_handler(request, response):
@@ -293,9 +254,7 @@ def response_handler(request, response):
     response["Connection"] = "close"
     response["Server"] = "magicserver0.2"
     response_string = response_stringify(response)
-    request["socket"].send(response_string)
-    if request["header"]["Connection"] != "keep-alive":
-        request["socket"].close()
+    return response_string
 
 
 def send_html_handler(request, response, content):
@@ -305,9 +264,10 @@ def send_html_handler(request, response, content):
     if content:
         response["content"] = content.encode()
         response["Content-type"] = "text/html"
-        ok_200_handler(request, response)
+        res = ok_200_handler(request, response)
+        return res
     else:
-        err_404_handler(request, response)
+        return err_404_handler(request, response)
 
 
 def send_json_handler(request, response, content):
@@ -317,9 +277,9 @@ def send_json_handler(request, response, content):
     if content:
         response["content"] = json.dumps(content)
         response["Content-type"] = "application/json"
-        ok_200_handler(request, response)
+        return ok_200_handler(request, response)
     else:
-        err_404_handler(request, response)
+        return err_404_handler(request, response)
 
 
 # Session Managers
@@ -341,9 +301,11 @@ def get_session(request):
     Get session id from SESSIONS
     """
     browser_cookies = request["header"]["Cookie"]
+    print("Cookies:\n{0}".format(browser_cookies))
     if "sid" in browser_cookies:
         sid = browser_cookies["sid"]
         if sid in SESSIONS:
+            print("SID:\n{0}".format(SESSIONS))
             return SESSIONS[sid]
 
 
@@ -382,3 +344,28 @@ METHOD = {
     "DELETE": delete_handler,
     "PUT": put_handler
 }
+
+
+async def handle_connections(reader, writer):
+    addr = writer.get_extra_info("peername")
+    print("Connection from:{0}".format(addr))
+    data = await reader.read(1000)
+    message = data.decode()
+    data = worker_thread(message, addr)
+    writer.write(data)
+    await writer.drain()
+    writer.close()
+
+
+def start_server(hostname, port):
+    loop = asyncio.get_event_loop()
+    coro = asyncio.start_server(handle_connections, hostname, port, loop=loop)
+    server = loop.run_until_complete(coro)
+    print("Serving on {0}".format(server.sockets[0].getsockname()))
+    try:
+        loop.run_forever()
+    except KeyboardInterrupt:
+        pass
+    server.close()
+    loop.run_until_complete(server.wait_closed())
+    loop.close()
