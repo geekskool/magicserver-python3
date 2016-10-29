@@ -36,8 +36,8 @@ def add_route(method, path, func):
 
 
 # Server Functions
-def worker_thread(data, addr):
-    """WORKER THREAD
+def worker(data, addr):
+    """WORKER
     Accept requests and invoke request handler
     """
     request = {}
@@ -351,7 +351,7 @@ async def handle_connections(reader, writer):
     print("Connection from:{0}".format(addr))
     data = await reader.read(1000)
     message = data.decode()
-    data = worker_thread(message, addr)
+    data = worker(message, addr)
     writer.write(data)
     await writer.drain()
     writer.close()
