@@ -354,7 +354,7 @@ async def handle_connections(reader, writer):
     print("Connection from:{0}".format(addr))
     data = await reader.read(1000)
     message = data.decode()
-    data = worker(message, addr)
+    data = worker(message, addr).encode()
     writer.write(data)
     await writer.drain()
     writer.close()
