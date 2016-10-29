@@ -332,9 +332,12 @@ def response_stringify(response):
     response_string += "\r\n"
     response_string = response_string.encode()
     if "content" in response:
+        content = response["content"]
+        if isinstance(content, str):
+            content = content.encode()
         new_line = b"\r\n\r\n"
-        response_string += response["content"] + new_line
-    return response_string
+        response_string += content + new_line
+    return response_string.decode()
 
 
 METHOD = {
