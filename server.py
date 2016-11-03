@@ -3,7 +3,7 @@ from uuid import uuid1
 import asyncio
 import json
 import time
-
+import pprint
 
 ROUTES = {
     "get": {},
@@ -32,11 +32,11 @@ def add_route(method, path, func):
     """ADD ROUTES
     Build ROUTES
     """
-    ROUTES[method][path] = func
+    ROUTES[method.encode()][path] = func
 
 
 # Server Functions
-def worker(data, addr):
+async def worker(data, addr):
     """WORKER
     Accept requests and invoke request handler
     """
@@ -44,14 +44,12 @@ def worker(data, addr):
     request["address"] = addr
     header_str, body_str = get_http_header(request, data)
     if not header_str:
-        return
+        return err_404_handler(request, {})
     request = header_parser(request, header_str)
-    if "Content-Length" in request["header"]:
-        content_length = int(request["header"]["Content-Length"])
-        body_str = get_http_body(request, body_str, content_length)
-        request["body"] = body_str
+    request["body"] = body_str
     if request:
-        return request_handler(request)
+        result = await request_handler(request)
+        return result
 
 
 # Parsers
@@ -59,9 +57,8 @@ def get_http_header(request, data):
     """HTTP Header evaluator
     Accept HTTP header and evaluate
     """
-    print(data)
-    if "\r\n\r\n" in data:
-        data_list = data.split("\r\n\r\n", 1)
+    if b"\r\n\r\n" in data:
+        data_list = data.split(b"\r\n\r\n", 1)
         header_str = data_list[0]
         body_str = ""
         if len(data_list) > 1:
@@ -69,79 +66,82 @@ def get_http_header(request, data):
         return [header_str, body_str]
 
 
-def get_http_body(request, body_str, content_length):
-    """HTTP Body evaluator
-    Accept HTTP Body part and evaluate
-    """
-    if content_length == len(body_str):
-        return body_str
-
-
 def header_parser(request, header_str):
     """
     HTTP Header Parser
     """
     header = {}
-    header_list = header_str.split("\r\n")
+    header_list = header_str.split(b"\r\n")
     first = header_list.pop(0)
-    request["method"], request["path"], request["protocol"] = first.split()
+    status_line = [x.decode() for x in first.split()]
+    request["method"], request["path"], request["protocol"] = status_line
     for each_line in header_list:
-        key, value = each_line.split(": ", 1)
+        key, value = each_line.split(b": ", 1)
         header[key] = value
-    if "Cookie" in header:
-        cookies = header["Cookie"].split(";")
+    if b"Cookie" in header:
+        cookies = header[b"Cookie"].split(b";")
         client_cookies = {}
         for cookie in cookies:
-            head, body = cookie.strip().split("=", 1)
+            head, body = cookie.strip().split(b"=", 1)
             client_cookies[head] = body
-        header["Cookie"] = client_cookies
+        header[b"Cookie"] = client_cookies
     else:
-        header["Cookie"] = ""
+        header[b"Cookie"] = ""
     request["header"] = header
     return request
 
 
 def form_parser(request):
-    """MULTIPART Parser"""
+    """FORM Parser"""
     form = {}
-    content_type = request["header"]["Content-Type"]
-    boundary = content_type.split("; ")[1]
-    request["boundary"] = "--" + boundary.split("=")[1]
+    content_type = request["header"][b"Content-Type"]
+    boundary = content_type.split(b"; ")[1]
+    request["boundary"] = b"--" + boundary.split(b"=")[1]
     for content in request["body"].split(request["boundary"]):
         form_header_dict = {}
         data = {}
         if not content:
             continue
-        form_data = content.split("\r\n\r\n", 1)
-        form_header = form_data[0].split("\r\n")
+        form_data = content.split(b"\r\n\r\n", 1)
+        form_header = form_data[0].split(b"\r\n")
         form_body = ""
         if not form_header:
             continue
         if len(form_data) > 1:
             form_body = form_data[1]
         for each_line in form_header:
-            if not each_line or ": " not in each_line:
+            if not each_line or b": " not in each_line:
                 continue
-            key, value = each_line.split(": ")
+            key, value = each_line.split(b": ")
             form_header_dict[key] = value
         if not form_header_dict:
             continue
-        for each_item in form_header_dict["Content-Disposition"].split("; "):
-            if "=" in each_item:
-                name, value = each_item.split("=", 1)
-                data[name] = value.strip('"')
+        for each_item in form_header_dict[b"Content-Disposition"].split(b"; "):
+            if b"=" in each_item:
+                name, value = each_item.split(b"=", 1)
+                data[name] = value.strip(b'"')
                 data["body"] = form_body
-                form[data["name"]] = data
+                form[data[b"name"]] = data
     request["form"] = form
+    return request
 
+
+def multipart_parser(request):
+    content_dict = {}
+    for key, value in request["form"].items():
+        if b"filename" not in value:
+            content_dict[key.decode()] = value["body"].decode()
+        else:
+            content_dict[key.decode()] = value["body"]
+    return content_dict
 
 # Handler Functions
 
 
-def request_handler(request):
+async def request_handler(request):
     """Request Handler"""
     response = {}
-    response = session_handler(request, response)
+    # response = session_handler(request, response)
     return method_handler(request, response)
 
 
@@ -149,7 +149,7 @@ def session_handler(request, response):
     """Session Handler
     Add session ids to SESSION
     """
-    browser_cookies = request["header"]["Cookie"]
+    browser_cookies = request["header"][b"Cookie"]
     if "sid" in browser_cookies and browser_cookies["sid"] in SESSIONS:
         return response
     cookie = str(uuid1())
@@ -177,22 +177,26 @@ def get_handler(request, response):
 def post_handler(request, response):
     """HTTP POST Handler"""
     try:
-        if "multipart" in request["header"]["Content-Type"]:
-            form_parser(request)
-        request["content"] = parse_qs(request["body"])
+        if b"multipart" in request["header"][b"Content-Type"]:
+            request = form_parser(request)
+            request["content"] = multipart_parser(request)
+        else:
+            request["content"] = parse_qs(request["body"])
         return ROUTES["post"][request["path"]](request, response)
-    except KeyError:
+    except KeyboardInterrupt:
         return err_404_handler(request, response)
 
 
 def put_handler(request, response):
     """HTTP PUT Handler"""
     try:
-        if "multipart" in request["header"]["Content-Type"]:
-            form_parser(request)
-        request["content"] = parse_qs(request["body"])
+        if b"multipart" in request["header"][b"Content-Type"]:
+            request = form_parser(request)
+            request["content"] = multipart_parser(request)
+        else:
+            request["content"] = parse_qs(request["body"])
         return ROUTES["put"][request["path"]](request, response)
-    except KeyError:
+    except KeyboardInterrupt:
         return err_404_handler(request, response)
 
 
@@ -214,21 +218,20 @@ def head_handler(request, response):
 def static_file_handler(request, response):
     """HTTP Static File Handler"""
     try:
-        try:
-            with open("./public" + request["path"], "rb") as file_descriptor:
+        with open("./public" + request["path"], "rb") as file_descriptor:
+            byte = file_descriptor.read(1)
+            res = byte
+            while byte:
                 byte = file_descriptor.read(1)
-                res = byte
-                while byte:
-                    byte = file_descriptor.read(1)
-                    res += byte
-        except FileNotFoundError:
-            res = b""
-        response["content"] = res
-        content_type = request["path"].split(".")[-1].lower()
-        response["Content-type"] = CONTENT_TYPE[content_type]
-        return ok_200_handler(request, response)
+                res += byte
     except IOError:
         return err_404_handler(request, response)
+    except FileNotFoundError:
+        res = b""
+    response["content"] = res
+    content_type = request["path"].split(".")[-1].lower()
+    response["Content-type"] = CONTENT_TYPE[content_type]
+    return ok_200_handler(request, response)
 
 
 def err_404_handler(request, response):
@@ -262,7 +265,7 @@ def send_html_handler(request, response, content):
     Add html content to response
     """
     if content:
-        response["content"] = content.encode()
+        response["content"] = content
         response["Content-type"] = "text/html"
         res = ok_200_handler(request, response)
         return res
@@ -289,8 +292,8 @@ def add_session(request, content):
     """ADD SESSION
     Add session id to SESSIONS
     """
-    browser_cookies = request["header"]["Cookie"]
-    if "sid" in browser_cookies:
+    browser_cookies = request["header"][b"Cookie"]
+    if b"sid" in browser_cookies:
         sid = browser_cookies["sid"]
         if sid in SESSIONS:
             SESSIONS[sid] = content
@@ -300,12 +303,10 @@ def get_session(request):
     """GET SESSION
     Get session id from SESSIONS
     """
-    browser_cookies = request["header"]["Cookie"]
-    print("Cookies:\n{0}".format(browser_cookies))
-    if "sid" in browser_cookies:
+    browser_cookies = request["header"][b"Cookie"]
+    if b"sid" in browser_cookies:
         sid = browser_cookies["sid"]
         if sid in SESSIONS:
-            print("SID:\n{0}".format(SESSIONS))
             return SESSIONS[sid]
 
 
@@ -313,7 +314,7 @@ def del_session(request):
     """DEL SESSIONS
     Delete session from SESSIONS
     """
-    browser_cookies = request["header"]["Cookie"]
+    browser_cookies = request["header"][b"Cookie"]
     if "sid" in browser_cookies:
         sid = browser_cookies["sid"]
         if sid in SESSIONS:
@@ -337,7 +338,7 @@ def response_stringify(response):
             content = content.encode()
         new_line = b"\r\n\r\n"
         response_string += content + new_line
-    return response_string.decode()
+    return response_string
 
 
 METHOD = {
@@ -349,13 +350,26 @@ METHOD = {
 }
 
 
+def check_content(headers):
+    if b"Content-Length" in headers:
+        con_pos = headers.find(b"Content-Length")
+        col_pos = headers.find(b":", con_pos)
+        srsn = headers.find(b"\r\n", col_pos)
+        con_len = int(headers[col_pos + 2:srsn])
+        return con_len
+
 async def handle_connections(reader, writer):
     addr = writer.get_extra_info("peername")
     print("Connection from:{0}".format(addr))
-    data = await reader.read(1000)
-    message = data.decode()
-    data = worker(message, addr).encode()
-    writer.write(data)
+    header = await reader.readuntil(b"\r\n\r\n")
+    pprint.pprint(header.decode())
+    content_length = check_content(header)
+    data = header
+    if content_length:
+        content = await reader.readexactly(content_length)
+        data += content
+    response = await worker(data, addr)
+    writer.write(response)
     await writer.drain()
     writer.close()
 
