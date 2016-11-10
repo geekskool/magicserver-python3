@@ -141,7 +141,7 @@ def multipart_parser(request):
 async def request_handler(request):
     """Request Handler"""
     response = {}
-    # response = session_handler(request, response)
+    response = session_handler(request, response)
     return method_handler(request, response)
 
 
@@ -150,7 +150,8 @@ def session_handler(request, response):
     Add session ids to SESSION
     """
     browser_cookies = request["header"][b"Cookie"]
-    if "sid" in browser_cookies and browser_cookies["sid"] in SESSIONS:
+    if (browser_cookies and b"sid" in browser_cookies and
+            browser_cookies[b"sid"].decode() in SESSIONS):
         return response
     cookie = str(uuid1())
     response["Set-Cookie"] = "sid=" + cookie
@@ -294,7 +295,7 @@ def add_session(request, content):
     """
     browser_cookies = request["header"][b"Cookie"]
     if b"sid" in browser_cookies:
-        sid = browser_cookies["sid"]
+        sid = browser_cookies[b"sid"].decode()
         if sid in SESSIONS:
             SESSIONS[sid] = content
 
@@ -304,8 +305,8 @@ def get_session(request):
     Get session id from SESSIONS
     """
     browser_cookies = request["header"][b"Cookie"]
-    if b"sid" in browser_cookies:
-        sid = browser_cookies["sid"]
+    if browser_cookies and b"sid" in browser_cookies:
+        sid = browser_cookies[b"sid"].decode()
         if sid in SESSIONS:
             return SESSIONS[sid]
 
@@ -315,8 +316,8 @@ def del_session(request):
     Delete session from SESSIONS
     """
     browser_cookies = request["header"][b"Cookie"]
-    if "sid" in browser_cookies:
-        sid = browser_cookies["sid"]
+    if b"sid" in browser_cookies:
+        sid = browser_cookies[b"sid"].encode()
         if sid in SESSIONS:
             del SESSIONS[sid]
 
