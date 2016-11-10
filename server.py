@@ -75,6 +75,14 @@ def header_parser(request, header_str):
     first = header_list.pop(0)
     status_line = [x.decode() for x in first.split()]
     request["method"], request["path"], request["protocol"] = status_line
+    if "?" in request["path"]:
+        query_string = request["path"].split("?")
+        request["path"] = query_string[0]
+        content = {}
+        for val in query_string[1].split("&"):
+            temp = val.split("=")
+            content[temp[0]] = temp[1]
+        request["content"] = content
     for each_line in header_list:
         key, value = each_line.split(b": ", 1)
         header[key] = value
