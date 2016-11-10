@@ -32,7 +32,7 @@ def add_route(method, path, func):
     """ADD ROUTES
     Build ROUTES
     """
-    ROUTES[method.encode()][path] = func
+    ROUTES[method][path] = func
 
 
 # Server Functions
