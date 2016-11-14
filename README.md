@@ -1,6 +1,6 @@
 # magicserver
 
-Functional web server in Python 3
+Functional web server in Python 3.5 using the asyncio module.
 
 ## Install
 
@@ -33,11 +33,11 @@ def home(request, response):
 server.add_route('get', '/', home)
 ```
 
-To start server, use `server.start_server('ip', port, number_of_workers)`
+To start server, use `server.start_server('ip', port)`
 
 Eg:
 
-  `server.start_server("localhost", 8080, 20)`
+  `server.start_server("localhost", 8080)`
 
 To send html or json data response, use the following functions `server.send_html_handler()` or `server.send_json_handler()` which take 3 arguments
 
