@@ -3,6 +3,7 @@ from uuid import uuid1
 import asyncio
 import json
 import time
+import pprint
 
 
 ROUTES = {
@@ -369,6 +370,7 @@ async def handle_connections(reader, writer):
     header = await reader.readuntil(b"\r\n\r\n")
     content_length = check_content(header)
     data = header
+    pprint.pprint(header.decode())
     if content_length:
         content = await reader.readexactly(content_length)
         data += content
