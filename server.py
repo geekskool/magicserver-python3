@@ -228,11 +228,7 @@ def static_file_handler(request, response):
     """HTTP Static File Handler"""
     try:
         with open("./public" + request["path"], "rb") as file_descriptor:
-            byte = file_descriptor.read(1)
-            res = byte
-            while byte:
-                byte = file_descriptor.read(1)
-                res += byte
+            res = file_descriptor.read()
     except IOError:
         return err_404_handler(request, response)
     except FileNotFoundError:
