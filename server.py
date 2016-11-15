@@ -1,4 +1,3 @@
-from urllib.parse import parse_qs
 from uuid import uuid1
 import asyncio
 import json
@@ -144,6 +143,15 @@ def multipart_parser(request):
             content_dict[key.decode()] = value["body"]
     return content_dict
 
+
+def parse_fields(body):
+    content_dict = {}
+    data_split = body.split(b"&")
+    for val in data_split:
+        key, value = val.split(b"=")
+        content_dict[key.decode()] = value.decode()
+    return content_dict
+
 # Handler Functions
 
 
@@ -191,7 +199,7 @@ def post_handler(request, response):
             request = form_parser(request)
             request["content"] = multipart_parser(request)
         else:
-            request["content"] = parse_qs(request["body"])
+            request["content"] = parse_fields(request["body"])
         return ROUTES["post"][request["path"]](request, response)
     except KeyboardInterrupt:
         return err_404_handler(request, response)
@@ -204,7 +212,7 @@ def put_handler(request, response):
             request = form_parser(request)
             request["content"] = multipart_parser(request)
         else:
-            request["content"] = parse_qs(request["body"])
+            request["content"] = parse_fields(request["body"])
         return ROUTES["put"][request["path"]](request, response)
     except KeyboardInterrupt:
         return err_404_handler(request, response)
