@@ -278,7 +278,7 @@ def response_handler(request, response):
     response["Date"] = time.strftime("%a, %d %b %Y %H:%M:%S", time.localtime())
     response["Connection"] = "close"
     response["Server"] = "magicserver0.2"
-    response_string = response_stringify(response)
+    response_string = make_response(response)
     return response_string
 
 
@@ -343,10 +343,9 @@ def del_session(request):
             del SESSIONS[sid]
 
 
-# Stringify
-def response_stringify(response):
+def make_response(response):
     """
-    Stringify the response object
+    Make a byte string of the response dictionary
     """
     response_string = response["status"] + "\r\n"
     keys = [key for key in response if key not in ["status", "content"]]
