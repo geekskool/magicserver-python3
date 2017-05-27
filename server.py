@@ -37,85 +37,74 @@ def add_route(method, path, func):
 
 
 # Server Functions
-async def worker(data, addr):
+async def worker(data):
     """WORKER
     Accept requests and invoke request handler
     """
     request = {}
-    request["address"] = addr
-    header_str, body_str = get_http_header(request, data)
+    header_str = data["header"].split("\r\n\r\n")[0]
     if not header_str:
         return err_404_handler(request, {})
     request = header_parser(request, header_str)
-    request["body"] = body_str
+    request["body"] = data["content"]
     if request:
         result = await request_handler(request)
         return result
 
 
 # Parsers
-def get_http_header(request, data):
-    """HTTP Header evaluator
-    Accept HTTP header and evaluate
-    """
-    if b"\r\n\r\n" in data:
-        data_list = data.split(b"\r\n\r\n", 1)
-        header_str = data_list[0]
-        body_str = ""
-        if len(data_list) > 1:
-            body_str = data_list[1]
-        return [header_str, body_str]
+def get_content(request):
+    query_string = request["path"].split("?")
+    request["path"] = query_string[0]
+    content = {}
+    for val in query_string[1].split("&"):
+        temp = val.split("=")
+        content[temp[0]] = temp[1]
+    return [request["path"], content]
+
+
+def get_header(header_list):
+    header = {}
+    for each_line in header_list:
+        key, value = each_line.split(": ", 1)
+        header[key] = value
+    if "Cookie" in header:
+        cookies = header["Cookie"].split(";")
+        client_cookies = {}
+        for cookie in cookies:
+            head, body = cookie.strip().split("=", 1)
+            client_cookies[head] = body
+            header["Cookie"] = client_cookies
+    else:
+        header["Cookie"] = ""
+    return header
 
 
 def header_parser(request, header_str):
     """
     HTTP Header Parser
     """
-    header = {}
-    header_list = header_str.split(b"\r\n")
+    header_list = header_str.split("\r\n")
     first = header_list.pop(0)
-    status_line = [x.decode() for x in first.split()]
+    status_line = first.split()
     request["method"], request["path"], request["protocol"] = status_line
     if "?" in request["path"]:
-        query_string = request["path"].split("?")
-        request["path"] = query_string[0]
-        content = {}
-        for val in query_string[1].split("&"):
-            temp = val.split("=")
-            content[temp[0]] = temp[1]
-        request["content"] = content
-    for each_line in header_list:
-        key, value = each_line.split(b": ", 1)
-        header[key] = value
-    if b"Cookie" in header:
-        cookies = header[b"Cookie"].split(b";")
-        client_cookies = {}
-        for cookie in cookies:
-            head, body = cookie.strip().split(b"=", 1)
-            client_cookies[head] = body
-        header[b"Cookie"] = client_cookies
-    else:
-        header[b"Cookie"] = ""
-    request["header"] = header
+        request["path"], request["content"] = get_content(request)
+    request["header"] = get_header(header_list)
     return request
 
 
 def form_parser(request):
     """FORM Parser"""
-    form = {}
-    content_type = request["header"][b"Content-Type"]
-    boundary = content_type.split(b"; ")[1]
-    request["boundary"] = b"--" + boundary.split(b"=")[1]
-    for content in request["body"].split(request["boundary"]):
+    content_type = request["header"]["Content-Type"]
+    boundary = content_type.split("; ")[1]
+    request["boundary"] = "--" + boundary.split("=")[1]
+    for content in request["body"].split(request["boundary"].encode()):
         form_header_dict = {}
         data = {}
-        if not content:
-            continue
         form_data = content.split(b"\r\n\r\n", 1)
         form_header = form_data[0].split(b"\r\n")
         form_body = ""
-        if not form_header:
-            continue
         if len(form_data) > 1:
             form_body = form_data[1]
         for each_line in form_header:
@@ -125,6 +114,7 @@ def form_parser(request):
             form_header_dict[key] = value
         if not form_header_dict:
             continue
+        form = {}
         for each_item in form_header_dict[b"Content-Disposition"].split(b"; "):
             if b"=" in each_item:
                 name, value = each_item.split(b"=", 1)
@@ -147,9 +137,9 @@ def multipart_parser(request):
 
 def parse_fields(body):
     content_dict = {}
-    data_split = body.split(b"&")
+    data_split = body.split("&")
     for val in data_split:
-        key, value = val.split(b"=")
+        key, value = val.split("=")
         content_dict[key.decode()] = value.decode()
     return content_dict
 
@@ -167,9 +157,9 @@ def session_handler(request, response):
     """Session Handler
     Add session ids to SESSION
     """
-    browser_cookies = request["header"][b"Cookie"]
-    if (browser_cookies and b"sid" in browser_cookies and
-            browser_cookies[b"sid"].decode() in SESSIONS):
+    browser_cookies = request["header"]["Cookie"]
+    if (browser_cookies and "sid" in browser_cookies and
+            browser_cookies["sid"] in SESSIONS):
         return response
     cookie = str(uuid1())
     response["Set-Cookie"] = "sid=" + cookie
@@ -203,7 +193,7 @@ def get_handler(request, response):
 def post_handler(request, response):
     """HTTP POST Handler"""
     try:
-        if b"multipart" in request["header"][b"Content-Type"]:
+        if "multipart" in request["header"]["Content-Type"]:
             request = form_parser(request)
             request["content"] = multipart_parser(request)
         else:
@@ -216,7 +206,7 @@ def post_handler(request, response):
 def put_handler(request, response):
     """HTTP PUT Handler"""
     try:
-        if b"multipart" in request["header"][b"Content-Type"]:
+        if "multipart" in request["header"]["Content-Type"]:
             request = form_parser(request)
             request["content"] = multipart_parser(request)
         else:
@@ -314,9 +304,9 @@ def add_session(request, content):
     """ADD SESSION
     Add session id to SESSIONS
     """
-    browser_cookies = request["header"][b"Cookie"]
-    if b"sid" in browser_cookies:
-        sid = browser_cookies[b"sid"].decode()
+    browser_cookies = request["header"]["Cookie"]
+    if "sid" in browser_cookies:
+        sid = browser_cookies["sid"]
         if sid in SESSIONS:
             SESSIONS[sid] = content
 
@@ -325,9 +315,9 @@ def get_session(request):
     """GET SESSION
     Get session id from SESSIONS
     """
-    browser_cookies = request["header"][b"Cookie"]
-    if browser_cookies and b"sid" in browser_cookies:
-        sid = browser_cookies[b"sid"].decode()
+    browser_cookies = request["header"]["Cookie"]
+    if browser_cookies and "sid" in browser_cookies:
+        sid = browser_cookies["sid"]
         if sid in SESSIONS:
             return SESSIONS[sid]
 
@@ -336,9 +326,9 @@ def del_session(request):
     """DEL SESSIONS
     Delete session from SESSIONS
     """
-    browser_cookies = request["header"][b"Cookie"]
-    if b"sid" in browser_cookies:
-        sid = browser_cookies[b"sid"].encode()
+    browser_cookies = request["header"]["Cookie"]
+    if "sid" in browser_cookies:
+        sid = browser_cookies["sid"]
         if sid in SESSIONS:
             del SESSIONS[sid]
 
@@ -370,17 +360,19 @@ def check_content(headers):
         con_len = int(headers[col_pos + 2:srsn])
         return con_len
 
+
 async def handle_connections(reader, writer):
     addr = writer.get_extra_info("peername")
     print("Connection from:{0}".format(addr))
     header = await reader.readuntil(b"\r\n\r\n")
     content_length = check_content(header)
-    data = header
-    pprint.pprint(header.decode())
+    data = {"content": None}
+    data["header"] = header.decode()
+    pprint.pprint(data["header"])
     if content_length:
         content = await reader.readexactly(content_length)
-        data += content
-    response = await worker(data, addr)
+        data["content"] = content
+    response = await worker(data)
     writer.write(response)
     await writer.drain()
     writer.close()
