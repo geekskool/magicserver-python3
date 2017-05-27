@@ -181,6 +181,13 @@ def method_handler(request, response):
     """METHOD Handler
     call respective method handler
     """
+    METHOD = {
+        "GET": get_handler,
+        "POST": post_handler,
+        "HEAD": head_handler,
+        "DELETE": delete_handler,
+        "PUT": put_handler
+    }
     handler = METHOD[request["method"]]
     return handler(request, response)
 
@@ -354,15 +361,6 @@ def response_stringify(response):
         new_line = b"\r\n\r\n"
         response_string += content + new_line
     return response_string
-
-
-METHOD = {
-    "GET": get_handler,
-    "POST": post_handler,
-    "HEAD": head_handler,
-    "DELETE": delete_handler,
-    "PUT": put_handler
-}
 
 
 def check_content(headers):
