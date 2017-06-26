@@ -50,3 +50,22 @@ Eg:
 def function(request, response):
   return server.send_html_handler(request, response, content)
 ```
+## middlewares
+
+Any python object with these attributes suffice as a middleware
+1. Has boolean ```self.PRE, self.POST``` values
+2. Has a callable with arguments: request, response eg: ```function(request, response)```
+3. This callable returns: request, response eg: ```return request, response```
+
+if ```self.PRE = True```, the middleware gets executed in the request handler (before entering the user app)
+
+if ```self.POST = True```, the middleware gets executed in the response handler (after user app, before rendering in browser)
+
+
+adding a  middleware to server
+```
+from middlewares import CustomMiddleware
+middleware_object = CustomMiddleware()
+
+server.add_middlewares(middleware_object)
+```
