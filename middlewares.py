@@ -53,3 +53,35 @@ class Session:
             sid = browser_cookies["sid"]
             if sid in self.SESSIONS:
                 del self.SESSIONS[sid]
+
+
+class Logger:
+    """Logger middleware
+    Logs all request, response to a file
+    """
+    def __init__(self, DEBUG=False, FILENAME="magicserver.log"):
+        self.PRE = False
+        self.POST = True
+        self.DEBUG = DEBUG
+        self.FILENAME = FILENAME
+
+    def __call__(self, *args):
+        return self.logger(*args)
+
+    def logger(self, request, response):
+        ip = request["header"]["Host"].split(":")[0]
+        date = response["Date"]
+        method = request["method"]
+        path = request["path"]
+        status = response["status"]
+
+        log = "{} - - [{}] \"{} {}\" {}\n".format(ip, date, method,
+                                             path, status)
+        self.write_print_logs(log)
+        return request, response
+
+    def write_print_logs(self, log):
+        if self.DEBUG:
+            print(log, end="")
+        with open(self.FILENAME, mode="a") as log_data:
+            log_data.write(log)
