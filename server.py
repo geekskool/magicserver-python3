@@ -153,6 +153,10 @@ def parse_fields(body):
 async def request_handler(request):
     """Request Handler"""
     response = {}
+    if MIDDLEWARES:
+        for middleware in MIDDLEWARES:
+            if middleware.PRE:
+                request, response = middleware(request, response)
     response = session_handler(request, response)
     return method_handler(request, response)
 
