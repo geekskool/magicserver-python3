@@ -285,6 +285,10 @@ def response_handler(request, response):
     response["Date"] = time.strftime("%a, %d %b %Y %H:%M:%S", time.localtime())
     response["Connection"] = "close"
     response["Server"] = "magicserver0.2"
+    if MIDDLEWARES:
+        for middleware in MIDDLEWARES:
+            if middleware.POST:
+                request, response = middleware(request, response)
     response_string = make_response(response)
     return response_string
 
