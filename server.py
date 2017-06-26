@@ -27,7 +27,7 @@ CONTENT_TYPE = {
 }
 
 SESSIONS = {}
-
+MIDDLEWARES = []
 
 def add_route(method, path, func):
     """ADD ROUTES
@@ -35,6 +35,10 @@ def add_route(method, path, func):
     """
     ROUTES[method][path] = func
 
+def add_middleware(func):
+    """ADD middlewares
+    """
+    MIDDLEWARES.append(func)
 
 # Server Functions
 async def worker(data):
