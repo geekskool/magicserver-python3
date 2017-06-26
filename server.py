@@ -1,4 +1,3 @@
-from uuid import uuid1
 import asyncio
 import json
 import time
@@ -26,8 +25,7 @@ CONTENT_TYPE = {
     "pdf": "application/pdf"
 }
 
-SESSIONS = {}
-
+MIDDLEWARES = []
 
 def add_route(method, path, func):
     """ADD ROUTES
@@ -35,6 +33,10 @@ def add_route(method, path, func):
     """
     ROUTES[method][path] = func
 
+def add_middleware(func):
+    """ADD middlewares
+    """
+    MIDDLEWARES.append(func)
 
 # Server Functions
 async def worker(data):
@@ -149,22 +151,11 @@ def parse_fields(body):
 async def request_handler(request):
     """Request Handler"""
     response = {}
-    response = session_handler(request, response)
+    if MIDDLEWARES:
+        for middleware in MIDDLEWARES:
+            if middleware.PRE:
+                request, response = middleware(request, response)
     return method_handler(request, response)
-
-
-def session_handler(request, response):
-    """Session Handler
-    Add session ids to SESSION
-    """
-    browser_cookies = request["header"]["Cookie"]
-    if (browser_cookies and "sid" in browser_cookies and
-            browser_cookies["sid"] in SESSIONS):
-        return response
-    cookie = str(uuid1())
-    response["Set-Cookie"] = "sid=" + cookie
-    SESSIONS[cookie] = {}
-    return response
 
 
 def method_handler(request, response):
@@ -265,12 +256,22 @@ def ok_200_handler(request, response):
     res = response_handler(request, response)
     return res
 
+def redirect(request, response, tmp_uri):
+    """HTTP 302 handler"""
+    response["status"] = "HTTP/1.1 302 Found"
+    response["location"] = tmp_uri
+    res = response_handler(request, response)
+    return res
 
 def response_handler(request, response):
     """HTTP response Handler"""
     response["Date"] = time.strftime("%a, %d %b %Y %H:%M:%S", time.localtime())
     response["Connection"] = "close"
     response["Server"] = "magicserver0.2"
+    if MIDDLEWARES:
+        for middleware in MIDDLEWARES:
+            if middleware.POST:
+                request, response = middleware(request, response)
     response_string = make_response(response)
     return response_string
 
@@ -298,42 +299,6 @@ def send_json_handler(request, response, content):
         return ok_200_handler(request, response)
     else:
         return err_404_handler(request, response)
-
-
-# Session Managers
-
-
-def add_session(request, content):
-    """ADD SESSION
-    Add session id to SESSIONS
-    """
-    browser_cookies = request["header"]["Cookie"]
-    if "sid" in browser_cookies:
-        sid = browser_cookies["sid"]
-        if sid in SESSIONS:
-            SESSIONS[sid] = content
-
-
-def get_session(request):
-    """GET SESSION
-    Get session id from SESSIONS
-    """
-    browser_cookies = request["header"]["Cookie"]
-    if browser_cookies and "sid" in browser_cookies:
-        sid = browser_cookies["sid"]
-        if sid in SESSIONS:
-            return SESSIONS[sid]
-
-
-def del_session(request):
-    """DEL SESSIONS
-    Delete session from SESSIONS
-    """
-    browser_cookies = request["header"]["Cookie"]
-    if "sid" in browser_cookies:
-        sid = browser_cookies["sid"]
-        if sid in SESSIONS:
-            del SESSIONS[sid]
 
 
 def make_response(response):
