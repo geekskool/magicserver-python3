@@ -1,4 +1,3 @@
-from uuid import uuid1
 import asyncio
 import json
 import time
@@ -26,7 +25,6 @@ CONTENT_TYPE = {
     "pdf": "application/pdf"
 }
 
-SESSIONS = {}
 MIDDLEWARES = []
 
 def add_route(method, path, func):
@@ -157,22 +155,7 @@ async def request_handler(request):
         for middleware in MIDDLEWARES:
             if middleware.PRE:
                 request, response = middleware(request, response)
-    response = session_handler(request, response)
     return method_handler(request, response)
-
-
-def session_handler(request, response):
-    """Session Handler
-    Add session ids to SESSION
-    """
-    browser_cookies = request["header"]["Cookie"]
-    if (browser_cookies and "sid" in browser_cookies and
-            browser_cookies["sid"] in SESSIONS):
-        return response
-    cookie = str(uuid1())
-    response["Set-Cookie"] = "sid=" + cookie
-    SESSIONS[cookie] = {}
-    return response
 
 
 def method_handler(request, response):
@@ -316,42 +299,6 @@ def send_json_handler(request, response, content):
         return ok_200_handler(request, response)
     else:
         return err_404_handler(request, response)
-
-
-# Session Managers
-
-
-def add_session(request, content):
-    """ADD SESSION
-    Add session id to SESSIONS
-    """
-    browser_cookies = request["header"]["Cookie"]
-    if "sid" in browser_cookies:
-        sid = browser_cookies["sid"]
-        if sid in SESSIONS:
-            SESSIONS[sid] = content
-
-
-def get_session(request):
-    """GET SESSION
-    Get session id from SESSIONS
-    """
-    browser_cookies = request["header"]["Cookie"]
-    if browser_cookies and "sid" in browser_cookies:
-        sid = browser_cookies["sid"]
-        if sid in SESSIONS:
-            return SESSIONS[sid]
-
-
-def del_session(request):
-    """DEL SESSIONS
-    Delete session from SESSIONS
-    """
-    browser_cookies = request["header"]["Cookie"]
-    if "sid" in browser_cookies:
-        sid = browser_cookies["sid"]
-        if sid in SESSIONS:
-            del SESSIONS[sid]
 
 
 def make_response(response):
