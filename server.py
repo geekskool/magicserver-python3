@@ -265,6 +265,12 @@ def ok_200_handler(request, response):
     res = response_handler(request, response)
     return res
 
+def redirect(request, response, tmp_uri):
+    """HTTP 302 handler"""
+    response["status"] = "HTTP/1.1 302 Found"
+    response["location"] = tmp_uri
+    res = response_handler(request, response)
+    return res
 
 def response_handler(request, response):
     """HTTP response Handler"""
