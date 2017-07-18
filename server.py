@@ -189,7 +189,7 @@ def post_handler(request, response):
             request = form_parser(request)
             request["content"] = multipart_parser(request)
         elif "json" in content_type:
-            request["content"] = json.loads(request["body"].decode("utf-8")
+            request["content"] = json.loads(request["body"].decode())
         else:
             request["content"] = parse_fields(request["body"])
         return ROUTES["post"][request["path"]](request, response)
