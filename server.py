@@ -191,7 +191,8 @@ def method_handler(request, response):
         "POST": post_handler,
         "HEAD": head_handler,
         "DELETE": delete_handler,
-        "PUT": put_handler
+        "PUT": put_handler,
+        "OPTIONS": options_handler
     }
     handler = METHOD[request["method"]]
     return handler(request, response)
@@ -240,6 +241,18 @@ def delete_handler(request, response):
         return ROUTES["delete"][request["path"]](request, response)
     except KeyError:
         return err_404_handler(request, response)
+
+
+def options_handler(request, response):
+    """HTTP OPTIONS Handler"""
+    path_methods = [i.upper() for i, j in ROUTES.items() if request[
+        "path"] in j.keys()]
+    response[
+        "Access-Control-Allow-Methods"] = ', '.join(path_methods)
+    response[
+        "Access-Control-Allow-Headers"] = request["header"]["Access-Control-Request-Headers"]
+    response["content"] = ""
+    return ok_200_handler(request, response)
 
 
 def head_handler(request, response):
