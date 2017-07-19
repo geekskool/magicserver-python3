@@ -172,8 +172,8 @@ async def request_handler(request):
 
 def cors_handler(request, response):
     """CORS Request handler
-    handles CORS requests, that 
-    has a "Origin" header. 
+    handles CORS requests, that
+    has a "Origin" header.
     """
     origin = request["header"]["Origin"]
     if origin in ALLOWED_ORIGINS:
@@ -389,6 +389,7 @@ async def handle_connections(reader, writer):
 
 
 def start_server(hostname, port):
+    add_allowed_origin('http://0.0.0.0:{}'.format(port))
     loop = asyncio.get_event_loop()
     coro = asyncio.start_server(handle_connections, hostname, port, loop=loop)
     server = loop.run_until_complete(coro)
