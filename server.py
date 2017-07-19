@@ -27,16 +27,19 @@ CONTENT_TYPE = {
 
 MIDDLEWARES = []
 
+
 def add_route(method, path, func):
     """ADD ROUTES
     Build ROUTES
     """
     ROUTES[method][path] = func
 
+
 def add_middleware(func):
     """ADD middlewares
     """
     MIDDLEWARES.append(func)
+
 
 # Server Functions
 async def worker(data):
@@ -145,9 +148,8 @@ def parse_fields(body):
         content_dict[key.decode()] = value.decode()
     return content_dict
 
+
 # Handler Functions
-
-
 async def request_handler(request):
     """Request Handler"""
     response = {}
@@ -189,7 +191,7 @@ def post_handler(request, response):
             request = form_parser(request)
             request["content"] = multipart_parser(request)
         elif "json" in content_type:
-            request["content"] = json.loads(request["body"])
+            request["content"] = json.loads(request["body"].decode())
         else:
             request["content"] = parse_fields(request["body"])
         return ROUTES["post"][request["path"]](request, response)
@@ -256,12 +258,14 @@ def ok_200_handler(request, response):
     res = response_handler(request, response)
     return res
 
+
 def redirect(request, response, tmp_uri):
     """HTTP 302 handler"""
     response["status"] = "HTTP/1.1 302 Found"
     response["location"] = tmp_uri
     res = response_handler(request, response)
     return res
+
 
 def response_handler(request, response):
     """HTTP response Handler"""
