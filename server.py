@@ -161,11 +161,25 @@ def parse_fields(body):
 async def request_handler(request):
     """Request Handler"""
     response = {}
+    if "Origin" in request["header"]:
+        response = cors_handler(request, response)
     if MIDDLEWARES:
         for middleware in MIDDLEWARES:
             if middleware.PRE:
                 request, response = middleware(request, response)
     return method_handler(request, response)
+
+
+def cors_handler(request, response):
+    """CORS Request handler
+    handles CORS requests, that 
+    has a "Origin" header. 
+    """
+    origin = request["header"]["Origin"]
+    if origin in ALLOWED_ORIGINS:
+        response["Access-Control-Allow-Origin"] = origin
+        response["Access-Control-Allow-Credentials"] = "true"
+    return response
 
 
 def method_handler(request, response):
