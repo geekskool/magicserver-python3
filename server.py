@@ -27,6 +27,8 @@ CONTENT_TYPE = {
 
 MIDDLEWARES = []
 
+ALLOWED_ORIGINS = []
+
 
 def add_route(method, path, func):
     """ADD ROUTES
@@ -39,6 +41,12 @@ def add_middleware(func):
     """ADD middlewares
     """
     MIDDLEWARES.append(func)
+
+
+def add_allowed_origin(origin):
+    """ADD allowed sources
+    """
+    ALLOWED_ORIGINS.append(origin)
 
 
 # Server Functions
