@@ -225,9 +225,12 @@ def post_handler(request, response):
 def put_handler(request, response):
     """HTTP PUT Handler"""
     try:
-        if "multipart" in request["header"]["Content-Type"]:
+        content_type = request["header"]["Content-Type"]
+        if "multipart" in content_type:
             request = form_parser(request)
             request["content"] = multipart_parser(request)
+        elif "json" in content_type:
+            request["content"] = json.loads(request["body"].decode())
         else:
             request["content"] = parse_fields(request["body"])
         return ROUTES["put"][request["path"]](request, response)
