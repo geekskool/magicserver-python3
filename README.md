@@ -1,6 +1,6 @@
 # magicserver
 
-Functional web server in Python 3.5 using the asyncio module.
+Functional web server in Python 3.5 and above using the asyncio module.
 
 ## Install
 
@@ -28,7 +28,7 @@ Eg:
 
 ```
 def home(request, response):
-  return server.send_html_handler(request, response, content)
+    return server.send_html_handler(request, response, content)
   
 server.add_route('get', '/', home)
 ```
@@ -40,8 +40,8 @@ Eg:
 ```
 server.add_route('get', '/user/<username>', user)
 
-def user(request, response, username)
-	return server.send_html_handler(request, response, content)
+def user(request, response, username):
+    return server.send_html_handler(request, response, content)
 ```
 
 To start server, use `server.start_server('ip', port)`
@@ -59,10 +59,10 @@ To send html or json data response, use the following functions `server.send_htm
 Eg:
 ```
 def function(request, response):
-  return server.send_html_handler(request, response, content)
+    return server.send_html_handler(request, response, content)
 ```
 
-## middlewares
+## Middlewares
 
 Any python object with these attributes suffice as a middleware
 1. Has boolean ```self.PRE, self.POST``` values
@@ -74,7 +74,7 @@ if ```self.PRE = True```, the middleware gets executed in the request handler (b
 if ```self.POST = True```, the middleware gets executed in the response handler (after user app, before rendering in browser)
 
 
-adding a  middleware to server
+### Adding a middleware to server
 ```
 from middlewares import CustomMiddleware
 middleware_object = CustomMiddleware()
