@@ -33,6 +33,17 @@ def home(request, response):
 server.add_route('get', '/', home)
 ```
 
+To add dynamic routes, put the dynamic part of the route in < > delimiters.
+
+Eg:
+
+```
+server.add_route('get', '/user/<username>', user)
+
+def user(request, response, username)
+	return server.send_html_handler(request, response, content)
+```
+
 To start server, use `server.start_server('ip', port)`
 
 Eg:
@@ -50,6 +61,7 @@ Eg:
 def function(request, response):
   return server.send_html_handler(request, response, content)
 ```
+
 ## middlewares
 
 Any python object with these attributes suffice as a middleware

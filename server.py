@@ -2,7 +2,7 @@ import asyncio
 import json
 import time
 import pprint
-
+import re
 
 ROUTES = {
     "get": {},
@@ -34,13 +34,19 @@ def add_route(method, path, func):
     """ADD ROUTES
     Build ROUTES
     """
-    ROUTES[method][path] = func
+    path_regex = build_route_regex(path)
+    ROUTES[method][path] = (func, path_regex)
 
 
 def add_middleware(func):
     """ADD middlewares
     """
     MIDDLEWARES.append(func)
+
+
+def build_route_regex(route):
+    route_regex = re.sub(r'(<\w+>)', r'(?P\1.+)', route)
+    return re.compile("^{}$".format(route_regex))
 
 
 def add_allowed_origin(origin):
@@ -198,10 +204,18 @@ def method_handler(request, response):
     return handler(request, response)
 
 
+def route_match(request, response, ROUTES):
+    for func, path_regex in ROUTES.values():
+        m = path_regex.match(request["path"])
+        if m:
+            return func(request, response, **m.groupdict())
+    return None
+
+
 def get_handler(request, response):
     """HTTP GET Handler"""
     try:
-        return ROUTES["get"][request["path"]](request, response)
+        return route_match(request, response, ROUTES["get"])
     except KeyError:
         return static_file_handler(request, response)
 
@@ -217,7 +231,7 @@ def post_handler(request, response):
             request["content"] = json.loads(request["body"].decode())
         else:
             request["content"] = parse_fields(request["body"])
-        return ROUTES["post"][request["path"]](request, response)
+        return route_match(request, response, ROUTES["post"])
     except KeyboardInterrupt:
         return err_404_handler(request, response)
 
@@ -233,7 +247,7 @@ def put_handler(request, response):
             request["content"] = json.loads(request["body"].decode())
         else:
             request["content"] = parse_fields(request["body"])
-        return ROUTES["put"][request["path"]](request, response)
+        return route_match(request, response, ROUTES["put"])
     except KeyboardInterrupt:
         return err_404_handler(request, response)
 
@@ -241,7 +255,7 @@ def put_handler(request, response):
 def delete_handler(request, response):
     """HTTP DELETE Handler"""
     try:
-        return ROUTES["delete"][request["path"]](request, response)
+        return route_match(request, response, ROUTES["delete"])
     except KeyError:
         return err_404_handler(request, response)
 
