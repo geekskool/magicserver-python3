@@ -27,6 +27,8 @@ CONTENT_TYPE = {
 
 MIDDLEWARES = []
 
+ALLOWED_ORIGINS = []
+
 
 def add_route(method, path, func):
     """ADD ROUTES
@@ -45,6 +47,12 @@ def add_middleware(func):
 def build_route_regex(route):
     route_regex = re.sub(r'(<\w+>)', r'(?P\1.+)', route)
     return re.compile("^{}$".format(route_regex))
+
+
+def add_allowed_origin(origin):
+    """ADD allowed sources
+    """
+    ALLOWED_ORIGINS.append(origin)
 
 
 # Server Functions
@@ -159,11 +167,25 @@ def parse_fields(body):
 async def request_handler(request):
     """Request Handler"""
     response = {}
+    if "Origin" in request["header"]:
+        response = cors_handler(request, response)
     if MIDDLEWARES:
         for middleware in MIDDLEWARES:
             if middleware.PRE:
                 request, response = middleware(request, response)
     return method_handler(request, response)
+
+
+def cors_handler(request, response):
+    """CORS Request handler
+    handles CORS requests, that
+    has a "Origin" header.
+    """
+    origin = request["header"]["Origin"]
+    if origin in ALLOWED_ORIGINS:
+        response["Access-Control-Allow-Origin"] = origin
+        response["Access-Control-Allow-Credentials"] = "true"
+    return response
 
 
 def method_handler(request, response):
@@ -175,7 +197,8 @@ def method_handler(request, response):
         "POST": post_handler,
         "HEAD": head_handler,
         "DELETE": delete_handler,
-        "PUT": put_handler
+        "PUT": put_handler,
+        "OPTIONS": options_handler
     }
     handler = METHOD[request["method"]]
     return handler(request, response)
@@ -216,9 +239,12 @@ def post_handler(request, response):
 def put_handler(request, response):
     """HTTP PUT Handler"""
     try:
-        if "multipart" in request["header"]["Content-Type"]:
+        content_type = request["header"]["Content-Type"]
+        if "multipart" in content_type:
             request = form_parser(request)
             request["content"] = multipart_parser(request)
+        elif "json" in content_type:
+            request["content"] = json.loads(request["body"].decode())
         else:
             request["content"] = parse_fields(request["body"])
         return route_match(request, response, ROUTES["put"])
@@ -232,6 +258,18 @@ def delete_handler(request, response):
         return route_match(request, response, ROUTES["delete"])
     except KeyError:
         return err_404_handler(request, response)
+
+
+def options_handler(request, response):
+    """HTTP OPTIONS Handler"""
+    path_methods = [i.upper() for i, j in ROUTES.items() if request[
+        "path"] in j.keys()]
+    response[
+        "Access-Control-Allow-Methods"] = ', '.join(path_methods)
+    response[
+        "Access-Control-Allow-Headers"] = request["header"]["Access-Control-Request-Headers"]
+    response["content"] = ""
+    return ok_200_handler(request, response)
 
 
 def head_handler(request, response):
@@ -365,6 +403,7 @@ async def handle_connections(reader, writer):
 
 
 def start_server(hostname, port):
+    add_allowed_origin('http://0.0.0.0:{}'.format(port))
     loop = asyncio.get_event_loop()
     coro = asyncio.start_server(handle_connections, hostname, port, loop=loop)
     server = loop.run_until_complete(coro)
