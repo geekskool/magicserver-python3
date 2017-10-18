@@ -1,6 +1,4 @@
 from uuid import uuid1
-from templates import welcome, div_footer
-import random
 
 class Session:
     """Session middleware class
@@ -78,7 +76,7 @@ class Logger:
         status = response["status"]
 
         log = "{} - - [{}] \"{} {}\" {}\n".format(ip, date, method,
-                                             path, status)
+                                                  path, status)
         self.write_print_logs(log)
         return request, response
 
@@ -87,29 +85,3 @@ class Logger:
             print(log, end="")
         with open(self.FILENAME, mode="a") as log_data:
             log_data.write(log)
-
-class Footer:
-    """Adds a footer middleware
-    Adds a new custom footer to a web page on every
-    request-response
-    """
-    def __init__(self):
-        self.PRE = False
-        self.POST = True
-        self.template = div_footer
-        self.msgs = welcome
-
-    def __call__(self, *args):
-        return self.set_footer(*args)
-
-    def set_footer(self, request, response):
-        try:
-            footer_html = self.template.format(self.get_msg())
-            response["content"] += footer_html
-            response["Content-Length"] = str(len(response["content"]))
-        except Exception:
-            pass
-        return request, response
-
-    def get_msg(self):
-        return random.choices(self.msgs)[0]
