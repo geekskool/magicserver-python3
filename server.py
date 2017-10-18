@@ -203,14 +203,19 @@ def method_handler(request, response):
     handler = METHOD[request["method"]]
     return handler(request, response)
 
+def handle_regex_mismatch(request):
+    method_path_dict = {"GET": ROUTES["get"][request["path"]],
+                        "POST": ROUTES["post"][request["path"]],
+                        "PUT": ROUTES["put"][request["path"]],
+                        "DELETE": ROUTES["delete"][request["path"]]}
+    return method_path_dict[request['method']]
 
 def route_match(request, response, ROUTES):
     for func, path_regex in ROUTES.values():
         m = path_regex.match(request["path"])
         if m:
             return func(request, response, **m.groupdict())
-    return None
-
+    return handle_regex_mismatch(request)(request, response)
 
 def get_handler(request, response):
     """HTTP GET Handler"""
