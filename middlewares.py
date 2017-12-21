@@ -76,7 +76,7 @@ class Logger:
         status = response["status"]
 
         log = "{} - - [{}] \"{} {}\" {}\n".format(ip, date, method,
-                                             path, status)
+                                                  path, status)
         self.write_print_logs(log)
         return request, response
 
